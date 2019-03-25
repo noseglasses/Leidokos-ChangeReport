@@ -1,0 +1,277 @@
+#!/usr/bin/python
+  
+# -*- coding: utf-8 -*-
+
+# -*- mode: python -*-
+#
+# Leidokos-ChangeReport
+#
+# Copyright (C) 2019  Noseglasses (shinynoseglasses@gmail.com)
+#
+# This program is free software: you can redistribute it and/or modify it under it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with along with
+# this program. If not, see <http://www.gnu.org/licenses/>.
+#         
+
+import subprocess
+import argparse
+import sys
+import os
+import re
+import tempfile
+
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+ 
+class LCR(object):
+   
+   def __init__(self):
+      
+      self.parseCommandLineArgs()
+      self.collectBuildInfo()
+      self.generateBundleSubmoduleInfoFiles()
+      self.buildFirmwares()
+      self.generateReport()
+      self.cleanup()
+      
+   def parseCommandLineArgs(self):
+      
+      self.remove_html_file = False
+
+      parser = argparse.ArgumentParser(description='Compare two firmware bundles and generate a change report.')
+      parser.add_argument('--old-sketch', default = None, dest='old_sketch_filename', help='The old Arduino sketch')
+      parser.add_argument('--new-sketch', default = None, dest='new_sketch_filename', help='The new Arduino sketch')
+      parser.add_argument("sketches", nargs='*', default = None, help='The sketches (this is an alternative to --old-sketch and --new-sketch)')
+      parser.add_argument('--title', default=None, dest='change_title', help='A title to use for the report')
+      parser.add_argument('--elf_diff-executable', default=None, dest='elf_diff_executable', help='An absolute path to the elf_diff exectuable.')
+      parser.add_argument('--report-file', default=None, dest='report_file', help='The path of the report file to generated.')
+      actual_args = list()
+      for arg_pos in range(1, len(sys.argv)):
+         arg = sys.argv[arg_pos]
+         if arg == "--":
+               break
+         actual_args.append(arg)
+           
+      args = parser.parse_args(actual_args)
+      
+      if len(args.sketches) == 0:
+         if not args.old_sketch_filename:
+            print "No old sketch filename defined"
+            exit(1)
+         else:
+            self.old_sketch_filename = args.old_sketch_filename
+            
+         if not args.new_sketch_filename:
+            print "No new sketch filename defined"
+            exit(1)
+         else:
+            self.new_sketch_filename = args.new_sketch_filename
+      elif len(args.sketches) == 2:
+         if args.old_sketch_filename:
+            print "Old sketch filename redundantly defined"
+            exit(1)
+         else:
+            self.old_sketch_filename = args.sketches[0]
+            
+         if args.new_sketch_filename:
+            print "Old sketch filename redundantly defined"
+            exit(1)
+         else:
+            self.new_sketch_filename = args.sketches[1]
+      else:
+         print "Please specify either none or two sketches"
+         exit(1)
+         
+      self.change_title = args.change_title
+         
+      self.old_bundle_dir = os.path.realpath(os.path.dirname(self.old_sketch_filename) + "/../../..")
+      self.new_bundle_dir = os.path.realpath(os.path.dirname(self.new_sketch_filename) + "/../../..")
+      
+      self.old_bundle_submodule_info_file = tempfile._get_default_tempdir() + \
+            "/" + next(tempfile._get_candidate_names()) + "_submodules_old_bundle.txt"
+      self.new_bundle_submodule_info_file = tempfile._get_default_tempdir() + \
+            "/" + next(tempfile._get_candidate_names()) + "_submodules_new_bundle.txt"
+         
+      if os.environ['ARDUINO_PATH'] != '':
+         self.arduino_path = os.environ['ARDUINO_PATH']
+      elif os.environ['ARDUINO_SDK_PATH'] != '':
+         self.arduino_path = os.environ['ARDUINO_SDK_PATH']
+      else:
+         print "Unable to detect Arduino path. Please specify either environment variable ARDUINO_PATH or ARDUINO_SDK_PATH."
+         sys.exit(1)
+         
+      if args.report_file:
+         self.report_file = args.report_file
+      else:
+         self.report_file = 'kaleidoscope_change_report.pdf'
+      
+      if args.elf_diff_executable:
+         if os.path.isfile(args.elf_diff_executable) and os.access(args.elf_diff_executable, os.X_OK):
+            self.elf_diff_executable = args.elf_diff_executable
+      else:
+         self.elf_diff_executable = which('elf_diff')
+         if not self.elf_diff_executable:
+            print "Unable to find elf_diff. Please specify it manually or add its location to the PATH variable."
+            sys.exit(1)
+      
+   def runSubprocess(self, cmd, cwd = os.getcwd(), env = os.environ.copy()):
+      
+      #print "   Running command: \'%s\'" % ("\"" + "\" \"".join(cmd) + "\"")
+      #print "   In: " + cwd
+      
+      proc = subprocess.Popen(cmd, \
+                              stdout = subprocess.PIPE, \
+                              stderr = subprocess.PIPE, \
+                              cwd = cwd, \
+                              env = env)
+
+      o, e = proc.communicate()
+
+      output = o.decode('ascii')
+      error = e.decode('ascii')
+      
+      rc = proc.returncode
+      
+      if rc != 0:
+         print "Failed running command %s in directory %s failed" % (str(cmd), cwd)
+         print "exit code: %d" % (int(rc))
+         print "output: %s" % (output)
+         print "error: %s" % (error)
+         sys.exit(1)
+         
+      return [output, error]
+   
+   def collectBuildInfo(self):
+
+      arduino_build_info = self.runSubprocess([self.arduino_path + "/arduino-builder", "-version"])[0]
+      
+      gcc_version_output = self.runSubprocess([self.arduino_path + "/hardware/tools/avr/bin/avr-g++", "-v"])[1]
+      
+      gcc_version_regex = r"gcc version (\d+\.\d+\.\d+) "
+      matches = re.finditer(gcc_version_regex, gcc_version_output, re.MULTILINE)
+
+      firmware_binary = None
+      
+      for matchNum, match in enumerate(matches, start=1):
+         gcc_version = "gcc version: " + match.group(1)
+         break
+      
+      self.build_info = arduino_build_info
+      self.build_info += "\n\n"
+      self.build_info += gcc_version
+      
+   def generateGitSubmoduleInfoFile(self, bundle_dir, info_file):
+      
+      print "Collecting git submodule info in %s" % (bundle_dir)
+
+      cmd = ['git', 'submodule']
+      
+      git_submodule_output = self.runSubprocess(cmd, cwd = bundle_dir)[0]
+      
+      output_file = open(info_file, "w")
+      
+      output_file.write(git_submodule_output)
+   
+   def generateBundleSubmoduleInfoFiles(self):
+      
+      self.generateGitSubmoduleInfoFile(self.old_bundle_dir, self.old_bundle_submodule_info_file)
+      self.generateGitSubmoduleInfoFile(self.new_bundle_dir, self.new_bundle_submodule_info_file)
+      
+   def buildFirmware(self, sketch_file):
+
+      sketch_dir = os.path.dirname(sketch_file)
+
+      print "Building firmware in %s" % (sketch_dir)
+      
+      cmd = ['make']
+      
+      my_env = os.environ.copy()
+      my_env['BOARD_HARDWARE_PATH'] = sketch_dir + '/../../../..'
+      
+      firmware_build_output = self.runSubprocess(cmd, cwd = sketch_dir, env = my_env)[0]
+      
+      build_info_regex = r"Building\s+\.\/(\S*)\s+.*\s+into\s+(.*)\.\.\."
+      
+      matches = re.finditer(build_info_regex, firmware_build_output, re.MULTILINE)
+
+      firmware_binary = None
+      
+      for matchNum, match in enumerate(matches, start=1):
+         firmware_binary = match.group(2) + "/" + match.group(1) + "-latest.elf"
+         break
+      
+      if not firmware_binary:
+      
+         build_info_regex = r"Building (\S*)[.\S\s]*Your compiled sketch can be found in (.*)\n"
+
+         matches = re.finditer(build_info_regex, firmware_build_output, re.MULTILINE)
+
+         firmware_binary = None
+         
+         for matchNum, match in enumerate(matches, start=1):
+            firmware_binary = match.group(2) + "/" + match.group(1) + "-latest.elf"
+            break
+
+      if not firmware_binary:
+         print "Failed decoding firmware build info"
+         print "Info is:"
+         print "%s" % (firmware_build_output)
+         sys.exit(1)
+
+      return firmware_binary
+      
+   def buildFirmwares(self):
+      
+      self.old_firmware_binary = self.buildFirmware(self.old_sketch_filename)
+      self.new_firmware_binary = self.buildFirmware(self.new_sketch_filename)
+      
+   def generateReport(self):
+      
+      print "Generating report"
+      
+      cmd = [  self.elf_diff_executable, \
+               '--project-title', 'Kaleidoscope: ' + self.change_title, \
+               '--old', str(self.old_firmware_binary), \
+               '--new', str(self.new_firmware_binary), \
+               '--old-alias', 'Old Kaleidoscope firmware', \
+               '--new-alias', 'New Kaleidoscope firmware', \
+               '--bin-dir', self.arduino_path + '/hardware/tools/avr/bin', \
+               '--bin-prefix', 'avr-', \
+               '--pdf-file', self.report_file, \
+               '--old-info-file', self.old_bundle_submodule_info_file, \
+               '--new-info-file', self.new_bundle_submodule_info_file, \
+               '--build-info', self.build_info
+            ]
+      
+      self.runSubprocess(cmd)
+      
+   def cleanup(self):
+      
+      if os.path.isfile(self.old_bundle_submodule_info_file):
+         os.remove(self.old_bundle_submodule_info_file)
+      if os.path.isfile(self.new_bundle_submodule_info_file):
+         os.remove(self.new_bundle_submodule_info_file)
+      
+if __name__ == "__main__":
+   driver = LCR()
