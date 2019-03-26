@@ -250,15 +250,19 @@ class LCR(object):
       
       print "Generating report"
       
+      report_file_basename = os.path.splitext(self.report_file)[0]
+      html_file = report_file_basename + ".html"
+      
       cmd = [  self.elf_diff_executable, \
                '--project-title', 'Kaleidoscope: ' + self.change_title, \
                '--old', str(self.old_firmware_binary), \
                '--new', str(self.new_firmware_binary), \
-               '--old-alias', 'Old Kaleidoscope firmware', \
-               '--new-alias', 'New Kaleidoscope firmware', \
+               '--old-alias', 'Old Kaleidoscope firmware (see version info below)', \
+               '--new-alias', 'New Kaleidoscope firmware (see version info below)', \
                '--bin-dir', self.arduino_path + '/hardware/tools/avr/bin', \
                '--bin-prefix', 'avr-', \
                '--pdf-file', self.report_file, \
+               '--html-file', html_file, \
                '--old-info-file', self.old_bundle_submodule_info_file, \
                '--new-info-file', self.new_bundle_submodule_info_file, \
                '--build-info', self.build_info
