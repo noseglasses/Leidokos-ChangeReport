@@ -11,13 +11,12 @@ The report contains detailed information about the binaries, their source code g
 ## Usage
 
 ```
-lcr
-   [--old-sketch old_sketch]
-   [--new-sketch new_sketch]
-   [--title title]
-   [--elf_diff-executable elf_diff_executable]
-   [--report-file report_file]
-   [sketches...]
+lcr [--old-sketch old_sketch]
+    [--new-sketch new_sketch]
+    [--title title]
+    [--elf_diff-executable elf_diff_executable]
+    [--report-file report_file]
+    [sketches...]
 ```
 
 * old_sketch: The old sketch file to build (identifies the old bundle directory tree).
