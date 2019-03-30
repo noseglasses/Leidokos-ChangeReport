@@ -253,8 +253,13 @@ class LCR(object):
       report_file_basename = os.path.splitext(self.report_file)[0]
       html_file = report_file_basename + ".html"
       
+      if self.change_title:
+         project_title = 'Kaleidoscope: ' + self.change_title
+      else:
+         project_title = 'Kaleidoscope: <Unknown Change>'
+      
       cmd = [  self.elf_diff_executable, \
-               '--project-title', 'Kaleidoscope: ' + self.change_title, \
+               '--project-title', project_title, \
                '--old', str(self.old_firmware_binary), \
                '--new', str(self.new_firmware_binary), \
                '--old-alias', 'Old Kaleidoscope firmware (see version info below)', \
