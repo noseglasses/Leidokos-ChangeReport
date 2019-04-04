@@ -11,19 +11,40 @@ The report contains detailed information about the binaries, their source code g
 ## Usage
 
 ```
-lcr [--old-sketch old_sketch]
-    [--new-sketch new_sketch]
-    [--title title]
-    [--elf_diff-executable elf_diff_executable]
-    [--report-file report_file]
-    [sketches...]
-```
+usage: lcr [-h] [--old_sketch OLD_SKETCH_FILENAME]
+           [--new_sketch NEW_SKETCH_FILENAME]
+           [--old_kaleidoscope_repo OLD_REPO_PATH]
+           [--new_kaleidoscope_repo NEW_REPO_PATH] [--title CHANGE_TITLE]
+           [--elf_diff-executable ELF_DIFF_EXECUTABLE]
+           [--report_file_basename REPORT_FILE_BASENAME]
+           [--report_target_dir REPORT_TARGET_DIR] [-v]
+           [sketches [sketches ...]]
 
-* old_sketch: The old sketch file to build (identifies the old bundle directory tree).
-* new_sketch: The new sketch file to build (identifies the new bundle directory tree).
-* title: A string to be used as report title.
-* elf_diff_executable: The elf_diff executable. Only supply this if elf_diff cannot be found in your PATH.
-* report_file: The path to a pdf file that is supposed to be created.
+Compare two firmware bundles and generate a change report.
+
+positional arguments:
+  sketches              The sketches (this is an alternative to --old-sketch
+                        and --new-sketch)
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --old_sketch OLD_SKETCH_FILENAME
+                        The old Arduino sketch
+  --new_sketch NEW_SKETCH_FILENAME
+                        The new Arduino sketch
+  --old_kaleidoscope_repo OLD_REPO_PATH
+                        Path to the old kaleidoscope repo
+  --new_kaleidoscope_repo NEW_REPO_PATH
+                        Path to the new kaleidoscope repo
+  --title CHANGE_TITLE  A title to use for the report
+  --elf_diff-executable ELF_DIFF_EXECUTABLE
+                        An absolute path to the elf_diff exectuable.
+  --report_file_basename REPORT_FILE_BASENAME
+                        The path of the report file to generated.
+  --report_target_dir REPORT_TARGET_DIR
+                        The path where to store report files.
+  -v, --verbose         Enable verbose output.
+```
 
 ## Requirements
 
