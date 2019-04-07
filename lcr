@@ -148,8 +148,8 @@ class LCR(object):
 
       o, e = proc.communicate()
 
-      output = o.decode('ascii')
-      error = e.decode('ascii')
+      output = o.decode('utf8')
+      error = e.decode('utf8')
       
       rc = proc.returncode
       
